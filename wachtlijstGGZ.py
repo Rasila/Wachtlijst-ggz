@@ -6,7 +6,7 @@ Instroom gemodelleerd met een Poisson-proces
 (parameter: gemidddelde instroom). 
 Behandelduur gemodelleerd met een normale verdeling 
 (parameters: gemiddelde behandelduur, spreiding behandelduur)
-Clienten kunnen drop-out gaan aan het eind van de wachttijd,
+Clienten kunnen drop-out gaan aan het eind van de hun wachttijd,
 of gedurende de behandeling.
 (parameters: kans drop-out wachtlijst, kans drop-out behandeling)
 
@@ -264,11 +264,11 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     # Onzekerheidsmarge wachtlijst plotten
     y_bovengrens = []
     for i in range(num_tijdstap):
-        y_boven = np.quantile(sim_wachtlijst[:,i], 0.75)
+        y_boven = np.quantile(sim_wachtlijst[:,i], 0.85)
         y_bovengrens.append(y_boven) 
     y_ondergrens = []
     for i in range(num_tijdstap):
-        y_onder = np.quantile(sim_wachtlijst[:,i],0.25)
+        y_onder = np.quantile(sim_wachtlijst[:,i],0.15)
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
 
@@ -290,76 +290,31 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     # Onzekerheidsmarge in_behandeling plotten
     y_bovengrens = []
     for i in range(num_tijdstap):
-        y_boven = np.quantile(sim_in_behandeling[:,i], 0.75)
+        y_boven = np.quantile(sim_in_behandeling[:,i], 0.85)
         y_bovengrens.append(y_boven)
     y_ondergrens = []
     for i in range(num_tijdstap):
-        y_onder = np.quantile(sim_in_behandeling[:,i], 0.25)
+        y_onder = np.quantile(sim_in_behandeling[:,i], 0.15)
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
 
 # -----------------------------------------------------------------------------
 # TEST Simulatie
 sim_w, sim_ib, wt, am, rho, max_capaciteit = simuleer_wachtlijst(
-                    num_wachtlijst_start = 2,
+                    num_wachtlijst_start = 0,
                     rho_start = 1, 
-                    max_capaciteit = 9, 
-                    instroom = 8/75, 
-                    gem_behandelduur = 75,
+                    max_capaciteit = 100, 
+                    instroom = 100/80, 
+                    gem_behandelduur = 80,
                     spreiding_duur = 0.2,
-                    p_dropout_w = 0.1,
-                    p_dropout_b = 0.15,
+                    p_dropout_w = 0.05,
+                    p_dropout_b = 0.1,
                     num_trials = 100, 
                     num_tijdstap = 520) 
 resultaten_simulatie(sim_w, sim_ib, wt, am, rho, max_capaciteit)
 
-# ---------------------------------------------------------------------------
-# Bereken theoretische waarde van evenwichtswachttijd M/G/c queue
-# Hier wordt drop-out niet in meegenomen
- 
-def B(c, rho):
-    """
-    Hulpfunctie die 'blocking probability' bepaalt. 
-    Nodig in functie theoretische_wachttijd. 
-    """
-    if(c == 0):
-        return 1
-    else:
-        return (rho*B(c-1, rho))/(c + rho*B(c-1, rho))
+# -----------------------------------------------------------------------------
     
-    
-def theoretische_wachttijd(instroom, gem_behandelduur, max_capaciteit, C):
-    """
-    Bepaalt theoretisch verwachte wachttijd voor M/G/c queue.
-    instroom = gemiddelde instroom per tijdseenheid
-    gem_behandelduur = gemiddelde behandelduur
-    max_capaciteit = aantal behandelplekken
-    C = coefficient of variance van verdeling departure times
-    """
-    # Vertaal input naar handige parameters
-    lamda = instroom
-    mu = 1/gem_behandelduur
-    c = max_capaciteit
-    rho = lamda/(c*mu)
-    
-    # Geef melding als rho > 1
-    if(rho > 1):
-        print("Instroom is structureel groter dan uitstroom. De wachttijd zal blijven toenemen.")
-    else:
-        # Bepaal pi_w (delay probability, nodig in formule voor theoretische wachttijd)
-        pi_w = (rho*B(c-1, c*rho))/(1 - rho + rho*B(c-1, c*rho))
-        
-        # Formule voor theoretisch verwachte wachttijd
-        EW = (C**2 + 1)/2 * pi_w * 1/(1-rho) * 1/(c*mu)
-        
-        # Return resultaat
-        return EW
- 
-    
-# TO DO
-# smooth ondergrens en bovengrens
-
-    
-    
+# TO DO: Budgetplafond optie maken. 
     
     
