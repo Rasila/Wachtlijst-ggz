@@ -88,24 +88,37 @@ class behandeling(object):
         self.wachtlijst.extend(nieuwe_clienten)
         
         # INSTROOM BEHANDELING op basis van plekken vrij en wachtenden
+        # Bepaal hoe veel plekken vrij
         plekken_vrij = self.max_capaciteit - len(self.in_behandeling)
-        # Initialiseer lijst voor wachttijden en aanmeldmomenten
+        # Initialiseer lijst wachttijden, aanmeldmomenten
         wachttijden = []
         aanmeldmomenten = []
-        # Laat plekken_vrij wachtenden starten
+        # Probeer voor elke vrije plek iemand te laten starten
         for i in range(plekken_vrij):
-            # Neem persoon bovenaan wachtlijst als deze bestaat
-            # En laat deze persoon eventueel drop-out gaan
-            if(len(self.wachtlijst) > 0):
-                starter = self.wachtlijst[0] 
-                # Voeg m toe aan in_behandeling, tenzij drop-out
-                if not(np.random.binomial(1, p_dropout_w)):
-                    self.in_behandeling.append(starter)
-                    # Registreer de wachttijd van deze persoon
-                    wachttijden.append(starter.wachttijd)
-                    aanmeldmomenten.append(self.tijd - starter.wachttijd)
-                # Verwijder deze persoon van wachtlijst
-                self.wachtlijst = self.wachtlijst[1:]
+            # Bepaal of er iemand is voor deze plek
+            # Zolang er wachtenden zijn...
+            while len(self.wachtlijst) > 0:
+                # ...neem eerste persoon in overweging als starter
+                starter = self.wachtlijst[0]
+                # als hij drop_out gaat...
+                if(np.random.binomial(1, p_dropout_w)):
+                    # ...verwijder van wachtlijst
+                    del self.wachtlijst[0]
+                # als geen drop-out...
+                else:
+                    # ..is er een persoon die gaat starten op deze vrije plek (stop while-loop)
+                    break
+            # Als niemand is gevonden om te starten, stop met proberen (stop for-loop)
+            if len(self.wachtlijst) == 0:
+                break
+            
+            # Anders gaat persoon starten
+            self.in_behandeling.append(starter)
+            # Registreer de wachttijd van deze persoon
+            wachttijden.append(starter.wachttijd)
+            aanmeldmomenten.append(self.tijd - starter.wachttijd)
+            # Verwijder deze persoon van wachtlijst
+            del self.wachtlijst[0]
         
         # UITSTROOM DOOR AFRONDEN BEHANDELING    
         # Check voor elke client of ie nog in behandeling blijft
@@ -162,13 +175,13 @@ def simuleer_wachtlijst(num_wachtlijst_start,
         # Initialiseer wachtlijst met nieuwe cliënten
         start_wachtlijst = []
         for i in range(num_wachtlijst_start):
-            behandelduur = np.random.normal(gem_behandelduur, 0.2*gem_behandelduur)
+            behandelduur = np.random.normal(gem_behandelduur, spreiding_duur*gem_behandelduur)
             start_wachtlijst.append(client(behandelduur, 0))
         
         # Initialiseer in_behandeling met cliënten die al variabel lang in behandeling zijn
         start_in_behandeling = []
         for i in range(math.floor(rho_start*max_capaciteit)):
-            behandelduur = np.random.normal(gem_behandelduur, 0.2*gem_behandelduur)
+            behandelduur = np.random.normal(gem_behandelduur, spreiding_duur*gem_behandelduur)
             al_behandeld = np.random.uniform(0, behandelduur)            
             start_in_behandeling.append(client(behandelduur - al_behandeld, 0))
         
@@ -303,8 +316,8 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
 sim_w, sim_ib, wt, am, rho, max_capaciteit = simuleer_wachtlijst(
                     num_wachtlijst_start = 0,
                     rho_start = 1, 
-                    max_capaciteit = 100, 
-                    instroom = 100/80, 
+                    max_capaciteit = 10, 
+                    instroom = 10/80, 
                     gem_behandelduur = 80,
                     spreiding_duur = 0.2,
                     p_dropout_w = 0.05,
