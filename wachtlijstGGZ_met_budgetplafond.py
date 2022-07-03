@@ -281,7 +281,6 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     num_punten = len(wachttijden)
     
     # Enkele resultaten om te printen
-    print(zorgverzekeraars) # Later weer weghalen
     wachttijd_gem = sum(wachttijden)/len(wachttijden)
     rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
