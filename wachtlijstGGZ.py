@@ -223,14 +223,22 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     # Bepaal grootte simulatie
     num_tijdstap = len(sim_wachtlijst[0])
     num_trials = len(sim_wachtlijst)
+    num_punten = len(wachttijden)
     
-    # SUMMARY STATISTICS
+    # Enkele resultaten om te printen
     wachttijd_gem = sum(wachttijden)/len(wachttijden)
+    wachttijd_sd = np.std(wachttijden)
+    clienten_gem = num_punten/num_trials
     rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
+    wachttijd_sd_tekst = str(round(wachttijd_sd))
     rho_gem_tekst = str(round(100*rho_gem))
-    print("De gemiddelde wachttijd in deze simulatie is " + wachttijd_gem_tekst + " weken.")
-    print("De capaciteit was gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
+    clienten_gem_tekst = str(round(clienten_gem))
+    print(str(num_trials) + " simulaties van " + str(num_tijdstap) + " weken.")
+    print("De gemiddelde wachttijd is " + wachttijd_gem_tekst + " weken.")
+    print("De standaardafwijking is " + wachttijd_sd_tekst + " weken.")
+    print("De capaciteit is gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
+    print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     # Bepaal percentage dat korter moest wachten dan treeknorm
     onder_treek = 0
     for wachttijd in wachttijden:
@@ -253,8 +261,10 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     x_punten = aanmeldmomenten
     y_punten = wachttijden
     ax.scatter(x_punten, y_punten, s = 1)
-    # Plot de lijn voor de treeknorm
-    ax.axhline(y=14, color='r', linestyle='--', linewidth = 1)
+    # Plot de lijnen voor treeknorm en gemiddelde en maak een legenda
+    ax.axhline(y=14, color='r', linestyle='--', linewidth = 1, label = 'treeknorm')
+    ax.axhline(y=wachttijd_gem, color='black', linestyle = '--', linewidth = 1, label = 'gemiddelde')
+    ax.legend()
     # Plot eindlijn
     x_eindlijn = np.linspace(num_tijdstap - max(wachttijden), num_tijdstap, 100)
     y_eindlijn = num_tijdstap - x_eindlijn
@@ -323,11 +333,10 @@ sim_w, sim_ib, wt, am, rho, max_capaciteit = simuleer_wachtlijst(
                     p_dropout_w = 0.05,
                     p_dropout_b = 0.1,
                     num_trials = 100, 
-                    num_tijdstap = 520) 
+                    num_tijdstap = 260) 
 resultaten_simulatie(sim_w, sim_ib, wt, am, rho, max_capaciteit)
 
 # -----------------------------------------------------------------------------
-    
-# TO DO: Budgetplafond optie maken. 
+
     
     

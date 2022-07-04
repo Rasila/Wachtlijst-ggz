@@ -282,13 +282,16 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     
     # Enkele resultaten om te printen
     wachttijd_gem = sum(wachttijden)/len(wachttijden)
+    wachttijd_sd = np.std(wachttijden)
     rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
+    wachttijd_sd_tekst = str(round(wachttijd_sd))
     rho_gem_tekst = str(round(100*rho_gem))
     clienten_gem = num_punten/num_trials
     clienten_gem_tekst = str(round(clienten_gem))  
     print(str(num_trials) + " simulaties van " + str(num_tijdstap) + " weken.")
     print("De gemiddelde wachttijd over alle simulaties is " + wachttijd_gem_tekst + " weken.")
+    print("De standaardafwijking is " + wachttijd_sd_tekst + " weken.")
     print("De capaciteit was gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     # Bepaal percentage dat korter moest wachten dan treeknorm
@@ -313,13 +316,6 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     ax.set_ylabel('Aantal weken gewacht')
     # Bepaal lijst met zorgverzekeraars
     zvs = list(set(zorgverzekeraars))
-    # Een handmatig gemaakte kleurenlijst (voor max vijf zorgverzekeraars)
-    kleurenlijst = ['deepskyblue', 'orchid', 'olivedrab', 'coral', 'goldenrod']
-    # Maak dictionary als vertaaltabel van zorgverzekeraar naar kleur
-    kleurtabel = {}
-    # zvs = list(set(zorgverzekeraars))
-    for i in range(len(zvs)):
-        kleurtabel[zvs[i]] = kleurenlijst[i] 
     # Maak scatterplot per zorgverzekeraar
     for zv in zvs:
         x_punten = []
@@ -328,11 +324,12 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
             if(zorgverzekeraars[i] == zv):
                 x_punten.append(aanmeldmomenten[i])
                 y_punten.append(wachttijden[i])
-        ax.scatter(x_punten, y_punten, s = 1, c = kleurtabel[zv], label = zv)
+        ax.scatter(x_punten, y_punten, s = 1, label = zv)
+    # Plot de lijn voor de treeknorm en het gemiddelde
+    ax.axhline(y=14, color='r', linestyle='--', linewidth = 1, label = 'treeknorm')
+    ax.axhline(y=wachttijd_gem, color='black', linestyle = '--', linewidth = 1, label = 'gemiddelde')
     # Maak legend
     ax.legend()
-    # Plot de lijn voor de treeknorm
-    ax.axhline(y=14, color='r', linestyle='--', linewidth = 1)
     # Plot eindlijn
     x_eindlijn = np.linspace(num_tijdstap - max(wachttijden), num_tijdstap, 100)
     y_eindlijn = num_tijdstap - x_eindlijn
@@ -369,9 +366,6 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     ax.set_title('Aantal mensen in behandeling')
     ax.set_xlabel('Tijd in weken')
     ax.set_ylabel('Aantal mensen')
-    x_punten = []
-    for x in range(num_tijdstap):
-        x_punten.append(x)
     y_punten = []
     for i in range(num_tijdstap):
         y_gem = sum(sim_in_behandeling[:,i])/num_trials
@@ -388,22 +382,36 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
         y_onder = np.quantile(sim_in_behandeling[:,i], 0.15)
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
+    
+    # VERLOOP PLAFONDS
+    fig, ax = plt.subplots()
+    ax.set_title('Resterende plekken in budgetplafonds')
+    ax.set_xlabel('Tijd in weken')
+    ax.set_ylabel('Aantal resterende plekken')
+    # Maak voor elke zorgverzekeraar een plot van het gemiddelde
+    for k in range(len(zvs)):
+        y_punten = []
+        for tijdstap in range(num_tijdstap):
+            y_gem = sum(sim_plafonds[:, tijdstap, k])/num_trials
+            y_punten.append(y_gem)
+        ax.plot(x_punten, y_punten, label = zvs[k])
+    ax.legend()
 
 # -----------------------------------------------------------------------------
 # TEST Simulatie
 sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit = simuleer_wachtlijst_bp(
-                    num_wachtlijst_start = 0,
+                    num_wachtlijst_start = 2,
                     rho_start = 1, 
                     max_capaciteit = 10, 
-                    instroom = 10/80,
+                    instroom = 12/80,
                     gem_behandelduur = 80,
                     spreiding_duur = 0.2,
                     p_dropout_w = 0.15,
                     p_dropout_b = 0.1,
                     num_trials = 100, 
-                    num_tijdstap = 520,
-                    start_plafonds = {'Zilveren Kruis': 2, 'VGZ': 4, 'Ohra':4},
-                    zv_kansen = [1, 1, 1]) 
+                    num_tijdstap = 260,
+                    start_plafonds = {'Zilveren kruis': 2, 'VGZ': 3, 'CZ': 2, 'Menzis': 3},
+                    zv_kansen = [2, 1, 2, 1]) 
 resultaten_simulatie_bp(sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit)
 
 # -----------------------------------------------------------------------------
