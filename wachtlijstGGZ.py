@@ -209,6 +209,35 @@ def simuleer_wachtlijst(num_wachtlijst_start,
         
 # -------------------------------------------------------------------------------
 
+def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
+    """
+    Bepaalt gemiddelde wachttijd op bepaald tijdstip over meerdere simulaties.
+    t = int, aanmeldmoment waarvoor wachttijd bepaald moet worden
+    delta = int, lengte van het tijdvak
+    wachttijden = list, lijst met wachttijden uit simulatie
+    aanmeldmomenten = list, lijst met bijbehorende aanmeldmomenten uit simulatie 
+    num_tijdstap = int, hoe lang liep de simulatie?
+    returns: wachttijd
+    """
+    # Als t te veel aan het eind van de simulatie zit, waardoor er geen volledige
+    # data meer beschikbaar is, geef melding. 
+    max_am = num_tijdstap - max(wachttijden)
+    if(t + 0.5*delta > max_am):
+        print("Dit aanmeldmoment ligt zo dicht bij het eind van de simulatie, dat de wachttijd niet goed bepaald kan worden.")
+    else:
+        # verzamel alle wachttijden binnen het tijdvak
+        wachttijden_tijdvak = []
+        for i in range(int(t - 0.5*delta), int(t + 0.5*delta)):
+           for j in range(len(aanmeldmomenten)):
+               if(aanmeldmomenten[j] == i):
+                   wachttijden_tijdvak.append(wachttijden[j])
+        n = len(wachttijden_tijdvak)               
+        gem = sum(wachttijden_tijdvak)/n
+        # print("Wachttijd bepaald op basis van " + str(n) + " clienten.")
+        return gem
+
+# -----------------------------------------------------------------------------
+
 def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, 
                          rho, max_capaciteit):
     """
@@ -222,40 +251,43 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     """
     # Bepaal grootte simulatie
     num_tijdstap = len(sim_wachtlijst[0])
-    num_trials = len(sim_wachtlijst)
+    num_sim = len(sim_wachtlijst)
     num_punten = len(wachttijden)
     
+    # Maak aangepaste lijst met wachttijden, alleen unbiased data
+    wachttijden_adj = []
+    for i in range(len(wachttijden)):
+        if(aanmeldmomenten[i] < num_tijdstap - max(wachttijden)):
+            wachttijden_adj.append(wachttijden[i])
+    
     # Enkele resultaten om te printen
-    wachttijd_gem = sum(wachttijden)/len(wachttijden)
-    wachttijd_sd = np.std(wachttijden)
-    clienten_gem = num_punten/num_trials
+    wachttijd_gem = sum(wachttijden_adj)/len(wachttijden_adj)
+    clienten_gem = num_punten/num_sim
     rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
-    wachttijd_sd_tekst = str(round(wachttijd_sd))
     rho_gem_tekst = str(round(100*rho_gem))
     clienten_gem_tekst = str(round(clienten_gem))
-    print(str(num_trials) + " simulaties van " + str(num_tijdstap) + " weken.")
+    print(str(num_sim) + " simulaties van " + str(num_tijdstap) + " weken.")
     print("De gemiddelde wachttijd is " + wachttijd_gem_tekst + " weken.")
-    print("De standaardafwijking is " + wachttijd_sd_tekst + " weken.")
     print("De capaciteit is gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     # Bepaal percentage dat korter moest wachten dan treeknorm
     onder_treek = 0
-    for wachttijd in wachttijden:
+    for wachttijd in wachttijden_adj:
         if(wachttijd < 14):
             onder_treek = onder_treek + 1
-    procent_onder_treek = round(100*onder_treek/len(wachttijden))
+    procent_onder_treek = round(100*onder_treek/len(wachttijden_adj))
     print(str(procent_onder_treek) + " procent is binnen treeknorm gestart.")
     
     # VERDELING WACHTTIJDEN
     fig, ax = plt.subplots()
-    ax.set_title('Verdeling wachttijd in ' + str(num_trials) + ' simulaties')
-    ax.hist(wachttijden)
+    ax.set_title('Verdeling wachttijd in ' + str(num_sim) + ' simulaties')
+    ax.hist(wachttijden_adj)
     ax.set_xlabel('Aantal weken')
     
-    # VERLOOP WACHTTIJD PER AANMELDMOMENT
+    # SCATTERPLOT WACHTTIJD PER AANMELDMOMENT
     fig, ax = plt.subplots()
-    ax.set_title('Wachttijden per aanmeldmoment (' + str(num_trials) + ' simulaties)')
+    ax.set_title('Wachttijden per aanmeldmoment (' + str(num_sim) + ' simulaties)')
     ax.set_xlabel('Week van aanmelden')
     ax.set_ylabel('Aantal weken gewacht')
     x_punten = aanmeldmomenten
@@ -270,6 +302,21 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     y_eindlijn = num_tijdstap - x_eindlijn
     ax.fill_between(x_eindlijn, y_eindlijn, max(wachttijden), alpha = 0.5, color = 'black')
     
+    # VERLOOP GEMIDDELDE WACHTTIJD 
+    fig, ax = plt.subplots()
+    ax.set_title('Verloop gemiddelde wachttijd')
+    ax.set_xlabel('Week van aanmelden')
+    ax.set_ylabel('Wachttijd')
+    # Plot de lijn van de gemiddelde wachttijd
+    x_punten = []
+    for x in range(num_tijdstap - max(wachttijden) - 10):
+        x_punten.append(x)
+    y_punten = []
+    for x in x_punten:
+        y_punten.append(gemiddelde_wachttijd(
+            x, 20, wachttijden, aanmeldmomenten, num_tijdstap))
+    ax.plot(x_punten, y_punten)
+    
     # VERLOOP WACHTLIJST
     fig, ax = plt.subplots()
     ax.set_title('Aantal mensen op wachtlijst')
@@ -281,7 +328,7 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
         x_punten.append(x)
     y_punten = []
     for i in range(num_tijdstap):
-        y_gem = sum(sim_wachtlijst[:,i])/num_trials
+        y_gem = sum(sim_wachtlijst[:,i])/num_sim
         y_punten.append(y_gem)
     ax.plot(x_punten, y_punten)
     # Onzekerheidsmarge wachtlijst plotten
@@ -306,7 +353,7 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
         x_punten.append(x)
     y_punten = []
     for i in range(num_tijdstap):
-        y_gem = sum(sim_in_behandeling[:,i])/num_trials
+        y_gem = sum(sim_in_behandeling[:,i])/num_sim
         y_punten.append(y_gem)
     # Gemiddeldelijn plotten
     ax.plot(x_punten, y_punten)
@@ -321,16 +368,17 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
 
-# -----------------------------------------------------------------------------
+#------------------------------------------------------------------------------
+
 # TEST Simulatie
 sim_w, sim_ib, wt, am, rho, max_capaciteit = simuleer_wachtlijst(
-                    num_wachtlijst_start = 0,
+                    num_wachtlijst_start = 2,
                     rho_start = 1, 
                     max_capaciteit = 10, 
                     instroom = 10/80, 
                     gem_behandelduur = 80,
                     spreiding_duur = 0.2,
-                    p_dropout_w = 0.05,
+                    p_dropout_w = 0.1,
                     p_dropout_b = 0.1,
                     num_trials = 100, 
                     num_tijdstap = 260) 
