@@ -257,7 +257,7 @@ def simuleer_wachtlijst_bp(num_wachtlijst_start,
             sim_in_behandeling[trial, tijdstap] = len(sim_behandeling.in_behandeling)
             rho = sim_in_behandeling/max_capaciteit
             
-    return sim_wachtlijst, sim_in_behandeling, sim_plafonds, wachttijden, aanmeldmomenten, zorgverzekeraars, rho, max_capaciteit
+    return sim_wachtlijst, sim_in_behandeling, sim_plafonds, wachttijden, aanmeldmomenten, zorgverzekeraars, rho, max_capaciteit, zvs
 # -------------------------------------------------------------------------------
 def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
     """
@@ -296,7 +296,7 @@ def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
 
 def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds, 
                             wachttijden, aanmeldmomenten, zorgverzekeraars,
-                            rho, max_capaciteit):
+                            rho, max_capaciteit, zvs):
     """
     Visualiseert het verloop van de simulatie en geeft samenvatting resultaten. 
     sim_wachtlijst: Matrix met op positie (i,j) de wachtlijst in trial i, tijdstap j.
@@ -305,8 +305,10 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
         zorgverzekeraar k. 
     wachttijden: Lijst met wachttijden van alle starters tijdens alle trials. 
     aanmeldmomenten: Lijst met aanmeldmomenten van alle starters tijdens alle trials
+    zorgverzekeraars: lijst met zorgverzekeraars van alle starters tijdens alle trials
     rho: Matrix met op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
     max_capaciteit: Aantal plekken in behandeling
+    zvs: Geordende lijst van zorgverzekeraars
     """
     # Bepaal grootte simulatie
     num_tijdstap = len(sim_wachtlijst[0])
@@ -314,10 +316,12 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     num_punten = len(wachttijden)
     
     # Maak aangepaste lijst met wachttijden, alleen unbiased data
+    # Geen mensen die op t=0 al op wachtlijst stonden
     wachttijden_adj = []
     for i in range(len(wachttijden)):
         if(aanmeldmomenten[i] < num_tijdstap - max(wachttijden)):
-            wachttijden_adj.append(wachttijden[i])
+            if not(aanmeldmomenten[i] == 0):
+                wachttijden_adj.append(wachttijden[i])
     
     # Enkele resultaten om te printen
     wachttijd_gem = sum(wachttijden_adj)/len(wachttijden_adj)
@@ -350,8 +354,7 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     ax.set_title('Wachttijden per aanmeldmoment (' + str(num_sim) + ' simulaties)')
     ax.set_xlabel('Week van aanmelden')
     ax.set_ylabel('Aantal weken gewacht')
-    # Bepaal lijst met zorgverzekeraars
-    zvs = list(set(zorgverzekeraars))
+
     # Maak scatterplot per zorgverzekeraar
     for zv in zvs:
         x_punten = []
@@ -462,20 +465,20 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
 
 # -----------------------------------------------------------------------------
 # TEST Simulatie
-sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit = simuleer_wachtlijst_bp(
-                    num_wachtlijst_start = 2,
+sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit, zvs = simuleer_wachtlijst_bp(
+                    num_wachtlijst_start = 20,
                     rho_start = 1, 
-                    max_capaciteit = 10, 
-                    instroom = 10/80,
-                    gem_behandelduur = 80,
+                    max_capaciteit = 30, 
+                    instroom = 30/26,
+                    gem_behandelduur = 26,
                     spreiding_duur = 0.2,
-                    p_dropout_w = 0.1,
-                    p_dropout_b = 0.1,
+                    p_dropout_w = 0.05,
+                    p_dropout_b = 0.05,
                     num_trials = 100, 
-                    num_tijdstap = 260,
-                    start_plafonds = {'Zilveren kruis': 2, 'VGZ': 4},
+                    num_tijdstap = 130,
+                    start_plafonds = {'Zilveren kruis': 25, 'VGZ': 30},
                     zv_kansen = [1, 1]) 
-resultaten_simulatie_bp(sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit)
+resultaten_simulatie_bp(sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit, zvs)
 
 # -----------------------------------------------------------------------------
     
