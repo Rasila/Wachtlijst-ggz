@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Jun 29 13:28:00 2022
-
-@author: rasil
+@author: Rasila Hoek
 """
 
 # -*- coding: utf-8 -*-
@@ -21,13 +19,16 @@ Brengt in beeld hoe de aantallen mensen op de wachtlijst en in behandeling verlo
 Laat zien hoe de verdeling van wachttijden en het verloop van wachttijd over de tijd 
 eruit ziet voor cliënten van verschillende zorgverzekeraars.  
 """
-
+# ----------------------------------------------------------------------------
 # Import modules
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 import random
 
+# Helper functions
+def flatten(l):
+    return [item for sublist in l for item in sublist]
 # ----------------------------------------------------------------------------
 class client(object):
     
@@ -35,7 +36,7 @@ class client(object):
     attributes:
         rest_behandelduur: float, de resterende behandelduur van deze client 
         wachttijd: int, hoe lang heeft deze cliënt tot nu toe gewacht?
-        zv: zorgverzekeraar
+        zv: zorgverzekeraar van deze cliënt
     """
     
     def __init__(self, rest_behandelduur, wachttijd, zv):
@@ -53,7 +54,6 @@ class client(object):
 class behandeling(object):
     
     """
-    behandeling
     attributes:
         wachtlijst: list, cliënten op de wachtlijst
         in_behandeling: list, cliënten in behandeling
@@ -81,7 +81,8 @@ class behandeling(object):
         Checkt of er behandelplekken vrij zijn en laat wachtenden instromen.
         Checkt of er cliënten klaar zijn om uit te stromen. 
         Checkt of er cliënten drop-out gaan.
-        Returns: wachttijden, aanmeldmomenten van in deze tijdstap gestarte cliënten
+        Updatet de resterende plekken per zorgverzekeraar.
+        Returns: wachttijden (list), aanmeldmomenten (list), zorgverzekeraars (list) van gestarte cliënten
         """
         
         # TIJD BIJHOUDEN
@@ -111,7 +112,7 @@ class behandeling(object):
         # Probeer voor elke vrije plek iemand te laten starten
         for i in range(plekken_vrij):
             # k houdt bij welke wachtende wordt overwogen
-            # begin met wachtende 0 
+            # te beginnen met de eerste wachtende, k = 0 
             k = 0
             # zolang er nog wachtenden zijn...
             while k < len(self.wachtlijst):
@@ -165,7 +166,7 @@ class behandeling(object):
                 in_behandeling_gedropt.append(clt)
         self.in_behandeling = in_behandeling_gedropt
         
-        # Return wachttijden
+        # Return wachttijden, aanmeldmomenten en zorgverzekeraars
         return wachttijden, aanmeldmomenten, zorgverzekeraars
     
 # ----------------------------------------------------------------------------
@@ -189,9 +190,11 @@ def simuleer_wachtlijst_bp(num_wachtlijst_start,
         max_capaciteit = int, aantal plekken in behandeling
         instroom = float, gemiddelde wekelijkse instroom
         gem_behandelduur = float, gemiddelde behandelduur
-        spreiding_duur = float, ratio spreiding/gemiddelde van behandelduur
-        p_dropout_w = kans dat iemand ergens tijdens wachtlijst uitvalt
-        p_dropout_b = kans dat iemand ergens tijdens behandeling uitvalt
+        spreiding_duur = float, ratio sd/gemiddelde van behandelduur
+        p_dropout_w = kans dat iemand op enig moment tijdens wachtlijst uitvalt
+        p_dropout_b = kans dat iemand op enig moment tijdens behandeling uitvalt
+        num_trials = int, hoe vaak moet de simulatie worden gedaan?
+        num_tijdstap = int, hoe veel weken moet de simulatie lopen?
         start_plafonds = dictionary met key verzekeraar, value plafond
         zv_kansen = list met hoe vaak elke zorgverzekeraar voorkomt (bijv percentages)
     """
@@ -206,6 +209,11 @@ def simuleer_wachtlijst_bp(num_wachtlijst_start,
 
     # Voor num_trials trials
     for trial in range(num_trials):
+        
+        # Initialiseer lijsten voor wachttijden, aanmeldmomenten in deze trial
+        wt_trial = []
+        am_trial = []
+        zv_trial = []
         
         # Initialiseer wachtlijst met nieuwe cliënten
         start_wachtlijst = []
@@ -239,9 +247,9 @@ def simuleer_wachtlijst_bp(num_wachtlijst_start,
             # Update de behandeling en sla wachttijden, aanmeldmomenten op
             wt, am, zv = sim_behandeling.update(instroom, p_dropout_w, 
                                                 p_dropout_b, spreiding_duur, zv_kansen)
-            wachttijden.extend(wt)
-            aanmeldmomenten.extend(am)
-            zorgverzekeraars.extend(zv)
+            wt_trial.extend(wt)
+            am_trial.extend(am)
+            zv_trial.extend(zv)
             # Als eind jaar, de plafonds weer terugzetten op startwaarde
             if(tijdstap%52 == 0):
                 sim_behandeling.plafonds = start_plafonds.copy()
@@ -256,6 +264,10 @@ def simuleer_wachtlijst_bp(num_wachtlijst_start,
             sim_wachtlijst[trial, tijdstap] = len(sim_behandeling.wachtlijst)
             sim_in_behandeling[trial, tijdstap] = len(sim_behandeling.in_behandeling)
             rho = sim_in_behandeling/max_capaciteit
+        # Sla wachttijden, aanmeldmomenten en zorgverzekeraars van deze trial op
+        wachttijden.append(wt_trial)
+        aanmeldmomenten.append(am_trial)
+        zorgverzekeraars.append(zv_trial)
             
     return sim_wachtlijst, sim_in_behandeling, sim_plafonds, wachttijden, aanmeldmomenten, zorgverzekeraars, rho, max_capaciteit, zvs
 # -------------------------------------------------------------------------------
@@ -263,14 +275,13 @@ def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
     """
     Hulpfunctie voor resultaten_simulatie_bp()
     Bepaalt gemiddelde wachttijd op bepaald tijdstip over meerdere simulaties.
-    
-    t = int, aanmeldmoment waarvoor wachttijd bepaald moet worden
-    delta = int, lengte van het tijdvak
-    wachttijden = list, lijst met wachttijden uit simulatie
-    aanmeldmomenten = list, lijst met bijbehorende aanmeldmomenten uit simulatie 
-    num_tijdstap = int, hoe lang liep de simulatie?
-    
-    returns: wachttijd
+    Args:
+        t = int, aanmeldmoment waarvoor gemiddelde wachttijd bepaald moet worden
+        delta = int, lengte van het tijdvak rondom tijdstip t
+        wachttijden = lijst met wachttijden uit simulatie
+        aanmeldmomenten = lijst met bijbehorende aanmeldmomenten uit simulatie 
+        num_tijdstap = int, hoe lang liep de simulatie?    
+    Returns: gemiddelde wachttijd
     """
     # Als t te veel aan het eind van de simulatie zit, waardoor er geen volledige
     # data meer beschikbaar is, geef melding. 
@@ -298,33 +309,38 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
                             wachttijden, aanmeldmomenten, zorgverzekeraars,
                             rho, max_capaciteit, zvs):
     """
-    Visualiseert het verloop van de simulatie en geeft samenvatting resultaten. 
-    sim_wachtlijst: Matrix met op positie (i,j) de wachtlijst in trial i, tijdstap j.
-    sim_in_behandeling: Matrix met op positie (i,j) de wachtlijst in trial i, tijdstap j. 
-    sim_plafonds: Array met op positie (i,j,k) de overgebleven plekken in trial i, tijdstap j, 
-        zorgverzekeraar k. 
-    wachttijden: Lijst met wachttijden van alle starters tijdens alle trials. 
-    aanmeldmomenten: Lijst met aanmeldmomenten van alle starters tijdens alle trials
-    zorgverzekeraars: lijst met zorgverzekeraars van alle starters tijdens alle trials
-    rho: Matrix met op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
-    max_capaciteit: Aantal plekken in behandeling
-    zvs: Geordende lijst van zorgverzekeraars
+    Visualiseert het verloop van de simulatie en geeft samenvatting resultaten.
+    Args:
+        sim_wachtlijst: matrix, op positie (i,j) lengte wachtlijst in trial i, tijdstap j.
+        sim_in_behandeling: matrix, op positie (i,j) aantal mensen in behandeling in trial i, tijdstap j. 
+        sim_plafonds: array, op positie (i,j,k) de overgebleven plekken in trial i, tijdstap j, 
+            zorgverzekeraar k. 
+        wachttijden: List of lists, element [i][j] is wachttijd van j-de starter in trial i. 
+        aanmeldmomenten: List of lists, element [i][j] is aanmeldmoment van j-de starter in trial i. 
+        zorgverzekeraars: list of lists, element [i][j] is zorgverzekeraar van j-de starter in trial i. 
+        rho: matrix, op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
+        max_capaciteit: aantal behandelplekken
+        zvs: geordende lijst van zorgverzekeraars
     """
     # Bepaal grootte simulatie
     num_tijdstap = len(sim_wachtlijst[0])
     num_sim = len(sim_wachtlijst)
-    num_punten = len(wachttijden)
+    num_punten = len(flatten(wachttijden))
     
     # Maak aangepaste lijst met wachttijden, alleen unbiased data
     # Geen mensen die op t=0 al op wachtlijst stonden
     wachttijden_adj = []
+    # ga alle trials af
     for i in range(len(wachttijden)):
-        if(aanmeldmomenten[i] < num_tijdstap - max(wachttijden)):
-            if not(aanmeldmomenten[i] == 0):
-                wachttijden_adj.append(wachttijden[i])
+        wachttijden_adj.append([])
+        # ga alle wachttijden in deze trial af
+        for j in range(len(wachttijden[i])):
+            if(aanmeldmomenten[i][j] < num_tijdstap - max(flatten(wachttijden))):
+                if not(aanmeldmomenten[i][j] == 0):
+                    wachttijden_adj[i].append(wachttijden[i][j])
     
     # Enkele resultaten om te printen
-    wachttijd_gem = sum(wachttijden_adj)/len(wachttijden_adj)
+    wachttijd_gem = sum(flatten(wachttijden_adj))/len(flatten(wachttijden_adj))
     rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
     rho_gem_tekst = str(round(100*rho_gem))
@@ -336,34 +352,40 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     # Bepaal percentage dat korter moest wachten dan treeknorm
     onder_treek = 0
-    for wachttijd in wachttijden_adj:
-        if(wachttijd < 14):
-            onder_treek = onder_treek + 1
-    procent_onder_treek = round(100*onder_treek/len(wachttijden_adj))
+    for trial in range(len(wachttijden_adj)):
+        for wachttijd in wachttijden_adj[trial]:
+            if(wachttijd < 14):
+                onder_treek = onder_treek + 1
+    procent_onder_treek = round(100*onder_treek/len(flatten(wachttijden_adj)))
     print(str(procent_onder_treek) + " procent is binnen treeknorm gestart.")
     
-    # VERDELING WACHTTIJDEN
+    # VERDELING WACHTTIJDEN histogram
     fig, ax = plt.subplots()
     ax.set_title('Verdeling wachttijd in ' + str(num_sim) + ' simulaties')
-    ax.hist(wachttijden_adj)
+    ax.hist(flatten(wachttijden_adj))
     ax.set_xlabel('Aantal weken')
     
-    # SCATTERPLOT WACHTTIJD PER AANMELDMOMENT
+    # WACHTTIJD PER AANMELDMOMENT scatterplot
     fig, ax = plt.subplots()
     # Titels en assen
     ax.set_title('Wachttijden per aanmeldmoment (' + str(num_sim) + ' simulaties)')
     ax.set_xlabel('Week van aanmelden')
     ax.set_ylabel('Aantal weken gewacht')
 
+    # Maak alle lists flat
+    aanmeldmomenten_f = flatten(aanmeldmomenten)
+    wachttijden_f = flatten(wachttijden)
+    zorgverzekeraars_f = flatten(zorgverzekeraars)
+    
     # Maak scatterplot per zorgverzekeraar
     for zv in zvs:
         x_punten = []
         y_punten = []
         for i in range(num_punten):
-            if(zorgverzekeraars[i] == zv):
-                if not(aanmeldmomenten[i] == 0):
-                    x_punten.append(aanmeldmomenten[i])
-                    y_punten.append(wachttijden[i])
+            if(zorgverzekeraars_f[i] == zv):
+                if not(aanmeldmomenten_f[i] == 0):
+                    x_punten.append(aanmeldmomenten_f[i])
+                    y_punten.append(wachttijden_f[i])
         ax.scatter(x_punten, y_punten, s = 1, label = zv)
     # Plot de lijn voor de treeknorm en het gemiddelde
     ax.axhline(y=14, color='r', linestyle='--', linewidth = 1, label = 'treeknorm')
@@ -371,37 +393,37 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     # Maak legend
     ax.legend()
     # Plot eindlijn
-    x_eindlijn = np.linspace(num_tijdstap - max(wachttijden), num_tijdstap, 100)
+    x_eindlijn = np.linspace(num_tijdstap - max(wachttijden_f), num_tijdstap, 100)
     y_eindlijn = num_tijdstap - x_eindlijn
-    ax.fill_between(x_eindlijn, y_eindlijn, max(wachttijden), alpha = 0.5, color = 'black')
+    ax.fill_between(x_eindlijn, y_eindlijn, max(wachttijden_f), alpha = 0.5, color = 'black')
     
-    # VERLOOP GEMIDDELDE WACHTTIJD 
-    if not(num_sim == 1):
-        fig, ax = plt.subplots()
-        ax.set_title('Verloop gemiddelde wachttijd')
-        ax.set_xlabel('Week van aanmelden')
-        ax.set_ylabel('Wachttijd')
-        delta = int(num_tijdstap/13)
-        x_punten = []
-        for x in range(int(num_tijdstap - max(wachttijden) - 0.5*delta)):
-            x_punten.append(x)
-        # Plot voor elke zv een lijn voor de gemiddelde wachttijd
-        for zv in zvs:
-            # Maak aangepaste lijsten met wachttijden en aanmeldmomenten
-            wachttijden_zv = []
-            aanmeldmomenten_zv = []
-            for i in range(len(wachttijden)):
-                if(zorgverzekeraars[i] == zv):
-                    wachttijden_zv.append(wachttijden[i])
-                    aanmeldmomenten_zv.append(aanmeldmomenten[i])
-            y_punten = []
-            for x in x_punten:
-                y_punten.append(gemiddelde_wachttijd(
-                    x, delta, wachttijden_zv, aanmeldmomenten_zv, num_tijdstap))
-            ax.plot(x_punten, y_punten, label = zv)
-        ax.legend()
+    # VERLOOP GEMIDDELDE WACHTTIJD grafiek
+    fig, ax = plt.subplots()
+    ax.set_title('Verloop gemiddelde wachttijd')
+    ax.set_xlabel('Week van aanmelden')
+    ax.set_ylabel('Wachttijd')
+    delta = int(num_tijdstap/13)
+    x_punten = []
+    for x in range(int(num_tijdstap - max(wachttijden_f) - 0.5*delta)):
+        x_punten.append(x)
+    # Plot voor elke zv een lijn voor de gemiddelde wachttijd
+    for zv in zvs:
+        # Maak aangepaste lijsten met wachttijden en aanmeldmomenten
+        # specifiek voor deze zorgverzekeraar
+        wachttijden_zv = []
+        aanmeldmomenten_zv = []
+        for i in range(len(wachttijden_f)):
+            if(zorgverzekeraars_f[i] == zv):
+                wachttijden_zv.append(wachttijden_f[i])
+                aanmeldmomenten_zv.append(aanmeldmomenten_f[i])
+        y_punten = []
+        for x in x_punten:
+            y_punten.append(gemiddelde_wachttijd(
+                x, delta, wachttijden_zv, aanmeldmomenten_zv, num_tijdstap))
+        ax.plot(x_punten, y_punten, label = zv)
+    ax.legend()
     
-    # VERLOOP WACHTLIJST
+    # VERLOOP WACHTLIJST grafiek
     fig, ax = plt.subplots()
     ax.set_title('Aantal mensen op wachtlijst')
     ax.set_xlabel('Tijd in weken')
@@ -427,7 +449,7 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
 
     
-    # VERLOOP IN_BEHANDELING
+    # VERLOOP IN_BEHANDELING grafiek
     fig, ax = plt.subplots()
     ax.set_title('Aantal mensen in behandeling')
     ax.set_xlabel('Tijd in weken')
@@ -449,7 +471,7 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
     
-    # VERLOOP PLAFONDS
+    # VERLOOP PLAFONDS grafiek
     fig, ax = plt.subplots()
     ax.set_title('Resterende plekken in budgetplafonds')
     ax.set_xlabel('Tijd in weken')
@@ -462,25 +484,6 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
             y_punten.append(y_gem)
         ax.plot(x_punten, y_punten, label = zvs[k])
     ax.legend()
-
-# -----------------------------------------------------------------------------
-# TEST Simulatie
-sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit, zvs = simuleer_wachtlijst_bp(
-                    num_wachtlijst_start = 20,
-                    rho_start = 1, 
-                    max_capaciteit = 30, 
-                    instroom = 30/26,
-                    gem_behandelduur = 26,
-                    spreiding_duur = 0.2,
-                    p_dropout_w = 0.05,
-                    p_dropout_b = 0.05,
-                    num_trials = 100, 
-                    num_tijdstap = 130,
-                    start_plafonds = {'Zilveren kruis': 25, 'VGZ': 30},
-                    zv_kansen = [1, 1]) 
-resultaten_simulatie_bp(sim_w, sim_ib, sim_p, wt, am, zv, rho, max_capaciteit, zvs)
-
-# -----------------------------------------------------------------------------
     
     
     

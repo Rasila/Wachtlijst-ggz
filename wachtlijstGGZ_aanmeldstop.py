@@ -1,11 +1,12 @@
-# -*- coding: utf-8 -*-
+
 """
 @author: Rasila Hoek
 """
 
 # -*- coding: utf-8 -*-
 """
-Agent-based model voor wachtlijst ggz. 
+Agent-based model voor wachtlijst ggz, met een aanmeldstop als de wachtlijst
+te lang wordt. 
 
 Instroom gemodelleerd met een Poisson-proces 
 (parameter: gemidddelde instroom). 
@@ -57,42 +58,51 @@ class behandeling(object):
         in_behandeling: list, cliënten in behandeling
         max_capaciteit: int, totaal aantal behandelplekken
         gem_behandelduur: int, gemiddelde behandelduur in weken
+        max_wl: int, hoe veel mensen mogen maximaal op wachtlijst
         tijd: int, hoe veel weken loopt de simulatie al
     """
     def __init__(self, wachtlijst, in_behandeling, 
-                 max_capaciteit, gem_behandelduur, tijd):
+                 max_capaciteit, gem_behandelduur, wl_max, tijd):
 
         # Set attributes
         self.wachtlijst = wachtlijst
         self.in_behandeling = in_behandeling
         self.max_capaciteit = max_capaciteit
         self.gem_behandelduur = gem_behandelduur
+        self.wl_max = wl_max
         self.tijd = tijd
         
     def update(self, instroom, p_dropout_w, p_dropout_b, spreiding_duur):
         """
         Functie die wachtlijst en in_behandeling updatet. 
-        Zorgt voor instroom wachtlijst op basis van Poisson met parameter instroom.
+        Zorgt voor instroom wachtlijst op basis van Poisson met parameter instroom,
+            tenzij de wachtlijst vol is.
+        Telt hoe veel mensen hadden willen aanmelden tijdens aanmeldstop. 
         Checkt of er behandelplekken vrij zijn en laat wachtenden instromen.
         Checkt of er cliënten klaar zijn om uit te stromen. 
         Checkt of er cliënten drop-out gaan.
-        Returns: wachttijden (list) en aanmeldmomenten (list) van gestarte clienten. 
+        Returns: wachttijden (list), aanmeldmomenten (list) van gestarte clienten,
+            en weggestuurd (int), aantal mensen dat tegen aanmeldstop aanliep.
         """
         
         # TIJD BIJHOUDEN
         self.tijd = self.tijd + 1
         
         # INSTROOM WACHTLIJST op basis van Poisson met parameter instroom.
+        weggestuurd = 0
         aantal_in = np.random.poisson(instroom)
-        # Creëer nieuwe cliënten voor op wachtlijst
-        nieuwe_clienten = []
-        for i in range(aantal_in):
-            # Bepaal behandelduur
-            behandelduur = np.random.normal(self.gem_behandelduur, spreiding_duur*self.gem_behandelduur)
-            nieuwe_client = client(behandelduur, 0)
-            nieuwe_clienten.append(nieuwe_client)
-        # Voeg nieuwe clienten toe aan wachtlijst
-        self.wachtlijst.extend(nieuwe_clienten)
+        if(len(self.wachtlijst) <= self.wl_max):
+            # Creëer nieuwe cliënten voor op wachtlijst
+            nieuwe_clienten = []
+            for i in range(aantal_in):
+                # Bepaal behandelduur
+                behandelduur = np.random.normal(self.gem_behandelduur, spreiding_duur*self.gem_behandelduur)
+                nieuwe_client = client(behandelduur, 0)
+                nieuwe_clienten.append(nieuwe_client)
+            # Voeg nieuwe clienten toe aan wachtlijst
+            self.wachtlijst.extend(nieuwe_clienten)
+        else:
+            weggestuurd = aantal_in
         
         # INSTROOM BEHANDELING op basis van plekken vrij en wachtenden
         # Bepaal hoe veel plekken vrij
@@ -145,19 +155,20 @@ class behandeling(object):
         self.in_behandeling = in_behandeling_gedropt
         
         # Return lijsten met wachttijden en aanmeldmomenten
-        return wachttijden, aanmeldmomenten
+        return wachttijden, aanmeldmomenten, weggestuurd
     
 # ----------------------------------------------------------------------------
-def simuleer_wachtlijst(num_wachtlijst_start, 
-                        rho_start, 
-                        max_capaciteit,
-                        instroom,
-                        gem_behandelduur,
-                        spreiding_duur,
-                        p_dropout_w,
-                        p_dropout_b,
-                        num_trials,
-                        num_tijdstap):
+def simuleer_wachtlijst_as(num_wachtlijst_start, 
+                           rho_start, 
+                           max_capaciteit,
+                           instroom,
+                           gem_behandelduur,
+                           spreiding_duur,
+                           p_dropout_w,
+                           p_dropout_b,
+                           max_wl,
+                           num_trials,
+                           num_tijdstap):
     """
     Functie die de simulatie runt. 
     Args:
@@ -169,6 +180,7 @@ def simuleer_wachtlijst(num_wachtlijst_start,
         spreiding_duur = float, ratio sd/gemiddelde van behandelduur
         p_dropout_w = kans dat iemand op enig moment tijdens wachtlijst uitvalt
         p_dropout_b = kans dat iemand op enig moment tijdens behandeling uitvalt
+        max_wl = int, maximale lengte van de wachtlijst voor aanmeldstop
         num_trials = int, hoe vaak moet de simulatie worden gedaan?
         num_tijdstap = int, hoe veel weken moet de simulatie lopen?
     """
@@ -177,6 +189,7 @@ def simuleer_wachtlijst(num_wachtlijst_start,
     aanmeldmomenten = []
     sim_wachtlijst = np.zeros((num_trials, num_tijdstap))
     sim_in_behandeling = np.zeros((num_trials, num_tijdstap))
+    weggestuurd = []
     
     # Voor num_trials trials
     for trial in range(num_trials):
@@ -184,6 +197,7 @@ def simuleer_wachtlijst(num_wachtlijst_start,
         # Initialiseer lijsten voor wachttijden, aanmeldmomenten in deze trial
         wt_trial = []
         am_trial = []
+        weg_trial = 0
         
         # Initialiseer wachtlijst met nieuwe cliënten
         start_wachtlijst = []
@@ -200,7 +214,8 @@ def simuleer_wachtlijst(num_wachtlijst_start,
         
         # Initialiseer behandeling met deze wachtlijst, in_behandeling, max_capaciteit
         sim_behandeling = behandeling(start_wachtlijst, start_in_behandeling, 
-                                      max_capaciteit, gem_behandelduur, tijd = 0)
+                                      max_capaciteit, gem_behandelduur, 
+                                      max_wl, tijd = 0)
         # Voor elke tijdstap:
         for tijdstap in range(num_tijdstap):
             # Update wachttijd voor alle clienten in wachtlijst
@@ -210,9 +225,10 @@ def simuleer_wachtlijst(num_wachtlijst_start,
             for clt in sim_behandeling.in_behandeling:
                 clt.update_behandelduur()
             # Update de behandeling en sla wachttijden en aanmeldmomenten op
-            wt, am = sim_behandeling.update(instroom, p_dropout_w, p_dropout_b, spreiding_duur)
+            wt, am, weg = sim_behandeling.update(instroom, p_dropout_w, p_dropout_b, spreiding_duur)
             wt_trial.extend(wt)
             am_trial.extend(am)
+            weg_trial = weg_trial + weg
             # Bereken en bewaar resultaten
             sim_wachtlijst[trial, tijdstap] = len(sim_behandeling.wachtlijst)
             sim_in_behandeling[trial, tijdstap] = len(sim_behandeling.in_behandeling)
@@ -220,12 +236,13 @@ def simuleer_wachtlijst(num_wachtlijst_start,
         # Sla wachttijden en aanmeldmomenten van deze trial op
         wachttijden.append(wt_trial)
         aanmeldmomenten.append(am_trial)
+        weggestuurd.append(weg_trial)
         
-    return sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, rho, max_capaciteit
+    return sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, weggestuurd, rho, max_capaciteit
 
 # ---------------------------------------------------------------------------------------
-def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, 
-                         rho, max_capaciteit):
+def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden, 
+                         aanmeldmomenten, weggestuurd, rho, max_capaciteit):
     """
     Visualiseert het verloop van de simulatie en geeft samenvatting resultaten. 
     Args:
@@ -233,6 +250,7 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
         sim_in_behandeling: matrix, op positie (i,j) aantal in behandeling in trial i, tijdstap j. 
         wachttijden: List of lists, element [i][j] is wachttijd van j-de starter in trial i. 
         aanmeldmomenten: list of lists, element [i][j] is aanmeldmoment van j-de starter in trial i.
+        weggestuurd: list, element i is het aantal mensen dat tegen aanmeldstop aanliep in trial i
         rho: matrix, op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
         max_capaciteit: aantal behandelplekken
     """
@@ -260,10 +278,14 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
     wachttijd_gem_tekst = str(round(wachttijd_gem))
     rho_gem_tekst = str(round(100*rho_gem))
     clienten_gem_tekst = str(round(clienten_gem))
+    weg_gem = sum(weggestuurd)/num_sim
+    weg_gem_tekst = str(round(weg_gem))
     print(str(num_sim) + " simulaties van " + str(num_tijdstap) + " weken.")
     print("De gemiddelde wachttijd is " + wachttijd_gem_tekst + " weken.")
     print("De capaciteit is gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
+    print("Er zijn per simulatie gemiddeld " + weg_gem_tekst + " mensen tegen een aanmeldstop aangelopen.")
+    
     # Bepaal percentage dat korter moest wachten dan treeknorm
     onder_treek = 0
     for trial in range(len(wachttijden_adj)):
@@ -353,5 +375,3 @@ def resultaten_simulatie(sim_wachtlijst, sim_in_behandeling, wachttijden, aanmel
         y_onder = np.quantile(sim_in_behandeling[:,i], 0.15)
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
-
-    
