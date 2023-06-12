@@ -102,6 +102,7 @@ class behandeling(object):
             # Voeg nieuwe clienten toe aan wachtlijst
             self.wachtlijst.extend(nieuwe_clienten)
         else:
+            # Registreer dat er mensen niet konden aanmelden
             weggestuurd = aantal_in
         
         # INSTROOM BEHANDELING op basis van plekken vrij en wachtenden
@@ -155,6 +156,7 @@ class behandeling(object):
         self.in_behandeling = in_behandeling_gedropt
         
         # Return lijsten met wachttijden en aanmeldmomenten
+        # En het aantal clienten dat niet kon aanmelden
         return wachttijden, aanmeldmomenten, weggestuurd
     
 # ----------------------------------------------------------------------------
@@ -232,17 +234,16 @@ def simuleer_wachtlijst_as(num_wachtlijst_start,
             # Bereken en bewaar resultaten
             sim_wachtlijst[trial, tijdstap] = len(sim_behandeling.wachtlijst)
             sim_in_behandeling[trial, tijdstap] = len(sim_behandeling.in_behandeling)
-            rho = sim_in_behandeling/max_capaciteit
         # Sla wachttijden en aanmeldmomenten van deze trial op
         wachttijden.append(wt_trial)
         aanmeldmomenten.append(am_trial)
         weggestuurd.append(weg_trial)
         
-    return sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, weggestuurd, rho, max_capaciteit
+    return sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, weggestuurd, max_capaciteit
 
 # ---------------------------------------------------------------------------------------
 def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden, 
-                         aanmeldmomenten, weggestuurd, rho, max_capaciteit):
+                         aanmeldmomenten, weggestuurd, max_capaciteit):
     """
     Visualiseert het verloop van de simulatie en geeft samenvatting resultaten. 
     Args:
@@ -251,7 +252,6 @@ def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden,
         wachttijden: List of lists, element [i][j] is wachttijd van j-de starter in trial i. 
         aanmeldmomenten: list of lists, element [i][j] is aanmeldmoment van j-de starter in trial i.
         weggestuurd: list, element i is het aantal mensen dat tegen aanmeldstop aanliep in trial i
-        rho: matrix, op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
         max_capaciteit: aantal behandelplekken
     """
     # Bepaal grootte simulatie
@@ -259,8 +259,9 @@ def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden,
     num_sim = len(sim_wachtlijst)
     num_punten = len(flatten(wachttijden))
     
-    # Maak aangepaste lijsten met wachttijden, alleen unbiased data, en zonder 
-    # de mensen die al op wachtlijst stonden bij begin simulatie
+    # Maak aangepaste lijsten met wachttijden
+    # zonder de mensen die al op wachtlijst stonden bij begin simulatie
+    # zonder mensen die pas heel laat in de simulatie kwamen
     wachttijden_adj = []
     # ga alle trials af
     for i in range(len(wachttijden)):
@@ -274,15 +275,12 @@ def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden,
     # Enkele resultaten om te printen
     wachttijd_gem = sum(flatten(wachttijden_adj))/len(flatten(wachttijden_adj))
     clienten_gem = num_punten/num_sim
-    rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
-    rho_gem_tekst = str(round(100*rho_gem))
     clienten_gem_tekst = str(round(clienten_gem))
     weg_gem = sum(weggestuurd)/num_sim
     weg_gem_tekst = str(round(weg_gem))
     print(str(num_sim) + " simulaties van " + str(num_tijdstap) + " weken.")
     print("De gemiddelde wachttijd is " + wachttijd_gem_tekst + " weken.")
-    print("De capaciteit is gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     print("Er zijn per simulatie gemiddeld " + weg_gem_tekst + " mensen tegen een aanmeldstop aangelopen.")
     
@@ -290,7 +288,7 @@ def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden,
     onder_treek = 0
     for trial in range(len(wachttijden_adj)):
         for wachttijd in wachttijden_adj[trial]:
-            if(wachttijd < 14):
+            if(wachttijd < 10):
                 onder_treek = onder_treek + 1
     procent_onder_treek = round(100*onder_treek/len(flatten(wachttijden_adj)))
     print(str(procent_onder_treek) + " procent is binnen treeknorm gestart.")
@@ -375,3 +373,17 @@ def resultaten_simulatie_as(sim_wachtlijst, sim_in_behandeling, wachttijden,
         y_onder = np.quantile(sim_in_behandeling[:,i], 0.15)
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
+    
+sim_w, sim_b, wt, am, weg, mc = simuleer_wachtlijst_as(
+                    num_wachtlijst_start = 2, 
+                    rho_start = 1, 
+                    max_capaciteit = 15,
+                    instroom = 15/78,
+                    gem_behandelduur = 78,
+                    spreiding_duur = 0.2,
+                    p_dropout_w = 0.1,
+                    p_dropout_b = 0.1,
+                    max_wl = 3,
+                    num_trials = 100,
+                    num_tijdstap = 260)
+resultaten_simulatie_as(sim_w, sim_b, wt, am, weg, mc)

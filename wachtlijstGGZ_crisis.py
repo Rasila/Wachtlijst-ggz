@@ -104,7 +104,7 @@ class behandeling(object):
         # Creëer nieuwe cliënten voor op wachtlijst
         nieuwe_clienten = []
         for i in range(aantal_in):
-            # Bepaal behandelduur (Hier spreiding behandelduur aannemen)
+            # Bepaal behandelduur
             behandelduur = np.random.normal(self.gem_behandelduur, spreiding_duur*self.gem_behandelduur)
             nieuwe_client = client(behandelduur, 0, True)
             nieuwe_clienten.append(nieuwe_client)
@@ -240,14 +240,13 @@ def simuleer_wachtlijst_cr(num_wachtlijst_start,
             # Bereken en bewaar resultaten
             sim_wachtlijst[trial, tijdstap] = len(sim_behandeling.wachtlijst)
             sim_in_behandeling[trial, tijdstap] = len(sim_behandeling.in_behandeling)
-            rho = sim_in_behandeling/max_capaciteit
         
         # Sla wachttijden, aanmeldmomenten en wel/geen crisis van deze trial op
         wachttijden.append(wt_trial)
         aanmeldmomenten.append(am_trial)
         crisis.append(cr_trial)
             
-    return sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, crisis, rho, max_capaciteit
+    return sim_wachtlijst, sim_in_behandeling, wachttijden, aanmeldmomenten, crisis, max_capaciteit
         
 # -------------------------------------------------------------------------------
 
@@ -284,7 +283,7 @@ def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
             return gem
 # -----------------------------------------------------------------------------
 def resultaten_simulatie_cr(sim_wachtlijst, sim_in_behandeling, wachttijden, 
-                            aanmeldmomenten, crisis, rho, max_capaciteit):
+                            aanmeldmomenten, crisis, max_capaciteit):
     """
     Visualiseert het verloop van de simulatie en geeft samenvatting resultaten. 
     Args: 
@@ -294,7 +293,6 @@ def resultaten_simulatie_cr(sim_wachtlijst, sim_in_behandeling, wachttijden,
         aanmeldmomenten = List of lists, element [i][j] is aanmeldmoment van j-de starter in trial i. 
         crisis = list of list, element [i][j] geeft aan of de j-de starter in trial i in crisis is. 
         zorgverzekeraars = list of lists, element [i][j] is zorgverzekeraar van j-de starter in trial i. 
-        rho = matrix, op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
         max_capaciteit = aantal behandelplekken
     """
     # Bepaal grootte simulatie
@@ -302,8 +300,9 @@ def resultaten_simulatie_cr(sim_wachtlijst, sim_in_behandeling, wachttijden,
     num_sim = len(sim_wachtlijst)
     num_punten = len(flatten(wachttijden))
     
-    # Maak aangepaste lijst met wachttijden, alleen unbiased data en zonder 
-    # de mensen die al op wachtlijst stonden bij begin simulatie
+    # Maak aangepaste lijst met wachttijden
+    # zonder de mensen die al op wachtlijst stonden bij begin simulatie
+    # zonder de mensen die pas heel laat in de simulatie kwamen
     wachttijden_adj = []
     # ga alle trials af
     for i in range(len(wachttijden)):
@@ -317,19 +316,16 @@ def resultaten_simulatie_cr(sim_wachtlijst, sim_in_behandeling, wachttijden,
     # Enkele resultaten om te printen
     wachttijd_gem = sum(flatten(wachttijden_adj))/len(flatten(wachttijden_adj))
     clienten_gem = num_punten/num_sim
-    rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
-    rho_gem_tekst = str(round(100*rho_gem))
     clienten_gem_tekst = str(round(clienten_gem))
     print(str(num_sim) + " simulaties van " + str(num_tijdstap) + " weken.")
     print("De gemiddelde wachttijd is " + wachttijd_gem_tekst + " weken.")
-    print("De capaciteit is gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     # Bepaal percentage dat korter moest wachten dan treeknorm
     onder_treek = 0
     for trial in range(len(wachttijden_adj)):
         for wachttijd in wachttijden_adj[trial]:
-            if(wachttijd < 14):
+            if(wachttijd < 10):
                 onder_treek = onder_treek + 1
     procent_onder_treek = round(100*onder_treek/len(flatten(wachttijden_adj)))
     print(str(procent_onder_treek) + " procent is binnen treeknorm gestart.")
@@ -364,7 +360,7 @@ def resultaten_simulatie_cr(sim_wachtlijst, sim_in_behandeling, wachttijden,
         ax.scatter(x_punten, y_punten, s = 1, label = cr_labels[cr])
     
     # Plot de lijnen voor treeknorm en gemiddelde en maak een legenda
-    ax.axhline(y=14, color='r', linestyle='--', linewidth = 1, label = 'treeknorm')
+    ax.axhline(y=10, color='r', linestyle='--', linewidth = 1, label = 'treeknorm')
     ax.axhline(y=wachttijd_gem, color='black', linestyle = '--', linewidth = 1, label = 'gemiddelde')
     ax.legend()
     # Plot eindlijn
@@ -449,7 +445,20 @@ def resultaten_simulatie_cr(sim_wachtlijst, sim_in_behandeling, wachttijden,
         y_ondergrens.append(y_onder)
     ax.fill_between(x_punten, y_ondergrens, y_bovengrens, alpha = 0.5)
 
-
+# SIMULATIE UITVOEREN
+sim_w, sim_b, wt, am, cr, mc = simuleer_wachtlijst_cr(
+                    num_wachtlijst_start = 2, 
+                    rho_start = 1, 
+                    max_capaciteit = 15,
+                    instroom = 11/78,
+                    in_crisis = 4/78,
+                    gem_behandelduur = 78,
+                    spreiding_duur = 0.2,
+                    p_dropout_w = 0.1,
+                    p_dropout_b = 0.1,
+                    num_trials = 100,
+                    num_tijdstap = 260)
+resultaten_simulatie_cr(sim_w, sim_b, wt, am, cr, mc)
 
     
     

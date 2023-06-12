@@ -140,7 +140,7 @@ class behandeling(object):
             # Laat persoon starten
             if self.plafonds[zv_starter] > 0:
                 self.in_behandeling.append(starter)
-                # Registreer de wachttijd van deze persoon
+                # Registreer de wachttijd, aanmeldmoment, zorgverzekeraar van deze persoon
                 wachttijden.append(starter.wachttijd)
                 aanmeldmomenten.append(self.tijd - starter.wachttijd)
                 zorgverzekeraars.append(zv_starter)
@@ -260,21 +260,20 @@ def simuleer_wachtlijst_bp(num_wachtlijst_start,
             num_zvs = len(zvs)
             for i in range(num_zvs):
                 sim_plafonds[trial, tijdstap, i] = sim_behandeling.plafonds[zvs[i]]
-            # Sla grootte wachtlijst, in_behandeling en rho op
+            # Sla grootte wachtlijst en in_behandeling op
             sim_wachtlijst[trial, tijdstap] = len(sim_behandeling.wachtlijst)
             sim_in_behandeling[trial, tijdstap] = len(sim_behandeling.in_behandeling)
-            rho = sim_in_behandeling/max_capaciteit
         # Sla wachttijden, aanmeldmomenten en zorgverzekeraars van deze trial op
         wachttijden.append(wt_trial)
         aanmeldmomenten.append(am_trial)
         zorgverzekeraars.append(zv_trial)
             
-    return sim_wachtlijst, sim_in_behandeling, sim_plafonds, wachttijden, aanmeldmomenten, zorgverzekeraars, rho, max_capaciteit, zvs
+    return sim_wachtlijst, sim_in_behandeling, sim_plafonds, wachttijden, aanmeldmomenten, zorgverzekeraars, max_capaciteit, zvs
 # -------------------------------------------------------------------------------
 def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
     """
     Hulpfunctie voor resultaten_simulatie_bp()
-    Bepaalt gemiddelde wachttijd op bepaald tijdstip over meerdere simulaties.
+    Bepaalt gemiddelde wachttijd rond bepaald tijdstip over meerdere simulaties.
     Args:
         t = int, aanmeldmoment waarvoor gemiddelde wachttijd bepaald moet worden
         delta = int, lengte van het tijdvak rondom tijdstip t
@@ -307,7 +306,7 @@ def gemiddelde_wachttijd(t, delta, wachttijden, aanmeldmomenten, num_tijdstap):
 
 def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds, 
                             wachttijden, aanmeldmomenten, zorgverzekeraars,
-                            rho, max_capaciteit, zvs):
+                            max_capaciteit, zvs):
     """
     Visualiseert het verloop van de simulatie en geeft samenvatting resultaten.
     Args:
@@ -318,7 +317,6 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
         wachttijden: List of lists, element [i][j] is wachttijd van j-de starter in trial i. 
         aanmeldmomenten: List of lists, element [i][j] is aanmeldmoment van j-de starter in trial i. 
         zorgverzekeraars: list of lists, element [i][j] is zorgverzekeraar van j-de starter in trial i. 
-        rho: matrix, op positie (i,j) de mate waarin behandeling gevuld is in trial i, tijdstap j. 
         max_capaciteit: aantal behandelplekken
         zvs: geordende lijst van zorgverzekeraars
     """
@@ -327,8 +325,9 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     num_sim = len(sim_wachtlijst)
     num_punten = len(flatten(wachttijden))
     
-    # Maak aangepaste lijst met wachttijden, alleen unbiased data
+    # Maak aangepaste lijst met wachttijden
     # Geen mensen die op t=0 al op wachtlijst stonden
+    # Geen mensen die pas heel laat in de simulatie kwamen
     wachttijden_adj = []
     # ga alle trials af
     for i in range(len(wachttijden)):
@@ -341,14 +340,11 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
     
     # Enkele resultaten om te printen
     wachttijd_gem = sum(flatten(wachttijden_adj))/len(flatten(wachttijden_adj))
-    rho_gem = sum(sum(rho))/np.size(rho)
     wachttijd_gem_tekst = str(round(wachttijd_gem))
-    rho_gem_tekst = str(round(100*rho_gem))
     clienten_gem = num_punten/num_sim
     clienten_gem_tekst = str(round(clienten_gem))  
     print(str(num_sim) + " simulaties van " + str(num_tijdstap) + " weken.")
     print("De gemiddelde wachttijd over alle simulaties is " + wachttijd_gem_tekst + " weken.")
-    print("De capaciteit was gemiddeld voor " + rho_gem_tekst + " procent gevuld.")
     print("Er zijn per simulatie gemiddeld " + clienten_gem_tekst + " clienten gestart met behandeling.")
     # Bepaal percentage dat korter moest wachten dan treeknorm
     onder_treek = 0
@@ -485,5 +481,18 @@ def resultaten_simulatie_bp(sim_wachtlijst, sim_in_behandeling, sim_plafonds,
         ax.plot(x_punten, y_punten, label = zvs[k])
     ax.legend()
     
-    
-    
+ # SIMULATIE UITVOEREN
+sim_w, sim_b, sim_p, wt, am, zv, mc, zvs = simuleer_wachtlijst_bp(
+                        num_wachtlijst_start = 2, 
+                        rho_start = 1, 
+                        max_capaciteit = 15,
+                        instroom = 15/78,
+                        gem_behandelduur = 78,
+                        spreiding_duur = 0.2,
+                        p_dropout_w = 0.1,
+                        p_dropout_b = 0.1,
+                        num_trials = 100,
+                        num_tijdstap = 260,
+                        start_plafonds = {"Zilveren kruis":6, "VGZ":5},
+                        zv_kansen = [0.5,0.5])   
+resultaten_simulatie_bp(sim_w, sim_b, sim_p, wt, am, zv, mc, zvs)
